@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test</title>
+    <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.css">
+    <style>
+
+        body {
+            background: rgb(240, 240, 240);
+        }
+        .container {
+            margin-top: 15px;
+        }
+
+        #cy {
+            width: 100%;
+            height: 500px;
+            display: block;
+            border: 1px solid grey;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="row">
+        <div class="col-sm-2">
+            <input class="form-control" type="text" id="title" value="Introduction to">
+        </div>
+        <div class="col-sm-2">
+            <input class="form-control" type="text" id="type1" value="subject">
+        </div>
+        <div class="col-sm-2">
+            <input class="form-control" type="text" id="type2" value="subject">
+        </div>
+        <div class="col-sm-2">
+            <select class="form-control" name="" id="sort">
+                <option value="relatedness" selected>Relatedness</option>
+                <option value="min_popularity">Minimum popularity</option>
+                <option value="max_popularity">Maximum_popularity</option>
+                <option value="foreground_popularity">Foreground popularity</option>
+                <option value="background_popularity">Background popularity</option>
+            </select>
+        </div>
+        <div class="col-sm-2">
+            <button class="btn btn-success" id="apply">Send</button>
+            <button class="btn btn-danger" id="reset">Reset</button>
+        </div>
+        <div id="cy"></div>
+    </div>
+</div>
+
+<script src="./node_modules/jquery/dist/jquery.min.js"></script>
+<script src="node_modules/lodash/lodash.js"></script>
+<script src="./node_modules/cytoscape/dist/cytoscape.js"></script>
+<script>
+    let allData = [];
+    const baseUrl = 'http://192.168.88.112:8983/solr/knowledge-graph/rel';
+
+    $('#reset').on('click', function() {
+        allData = [];
+        renderGraph([]);
+    });
+
+    $('#apply').on('click', function() {
+        fetch(baseUrl, {
+            method: 'POST',
+            contentType: 'application/json',
+            crossDomain: true,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "queries": [
+                    "title:" + $('#title')[0].value
+                ],
+                "compare": [
+                    {
+                        "type": $('#type1')[0].value,
+                        "limit": 50,
+                        "compare": [
+                            {
+                                "type": $('#type2')[0].value,
+                                "limit": 10,
+                                "discover_values": true,
+                                "values": [
+                                    "Science"
+                                ]
+                            }
+                        ],
+                        "sort": $('#sort')[0].value
+                    }
+                ]
+            })
+        }).then(function(data)  {
+            data.json().then(function(parsedData){
+                allData.push({
+                    main: true,
+                    name: $('#title')[0].value,
+                    items: parsedData.data[0].values
+                });
+                renderGraph(createConfig(allData));
+            })
+
+        })
+    });
+
+    function renderGraph(nodes) {
+        let cy = cytoscape({
+
+            container: document.getElementById('cy'), // container to render in
+
+            elements: nodes,
+
+            style: [ // the stylesheet for the graph
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': 'data(color)',
+                        'label': 'data(id)'
+                    }
+                },
+
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 3,
+                        'font-style': 'italic',
+                        'line-color': 'rba(100, 100, 100)',
+                        'target-arrow-color': '#ccc',
+                        'target-arrow-shape': 'triangle',
+                        label: 'data(label)'
+                    }
+                }
+            ],
+
+            layout: {
+                name: 'grid',
+                rows: 1
+            }
+
+        });
+    }
+
+    function createConfig(data) {
+        let config = [];
+
+        _.forEach(data, function(mainItem) {
+            config.push({
+                data: {
+                    id: mainItem.name,
+                    color: 'red'
+                }
+            });
+
+            _.forEach(mainItem.items, function(secondLevelItems) {
+                config.push({
+                    data: {
+                        id: secondLevelItems.name,
+                        label: secondLevelItems.name,
+                        color: 'green'
+                    }
+                });
+
+                config.push({
+                    data: { id: secondLevelItems.name + mainItem.name, source: mainItem.name, target: secondLevelItems.name, label: secondLevelItems.relatedness }
+                });
+
+            });
+        });
+
+        return config;
+    }
+
+</script>
+</body>
+</html>
